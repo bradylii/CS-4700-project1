@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+import socket, ssl, json, certifi, argparse
+
+# Helper to send to server
+def send_json_line(sock, obj):
+    json_string = json.dumps(obj, separators=(",", ":"))
+    byte_data = json_string.encode("ascii")
+    byte_data += b"\n"
+    sock.sendall(byte_data)
+
+# Helper to load chunks seperate messages with buffer for \n
+def recv_line(sock, buf):
+    while True:
+        new_line_index = buf.find(b"\n")
+        if new_line_index != -1: # we hit a \n
+            line = bytes(buf[:new_line_index]) # capture the full line
+            del buf[:new_line_index + 1] # remove line and new line
+            return line
+        chunk = sock.recv(4096) # load next chunk
+        if chunk == b"":
+            raise ConnectionError("server closed connection")
+        buf.extend(chunk) # add chunk to buffer
+
+
+# Helper to recieve and turn bytes to proper json messages
+def recv_json(sock, buf): 
+    byte_line = recv_line(sock, buf)
+    str_line = byte_line.decode("ascii")
+    return json.loads(str_line)
+
+def main():
+    # deal with flags and set up
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", dest="port", type=int)
+    parser.add_argument("-s", dest="tls", action="store_true")
+    parser.add_argument("hostname")
+    parser.add_argument("username")
+    args = parser.parse_args()
+
+    # variables
+    use_tls = args.tls
+    username = args.username
+    hostname = args.hostname
+    hello = {
+        "type": "hello",
+        "northeastern_username" : username
+    }
+
+    # conditional tag logic for TCP 27993 vs TLS 27994
+    if args.port is None:
+        if use_tls: port = 27994
+        else: port = 27993
+    else:
+        port = args.port
+
+    buf = bytearray() # buffer for loading/saving chunks
+    sock = socket.create_connection((hostname, port), None)
+
+    # wrap socket for cryptographic layer for TLS, SSL runs over TCP connection
+    if use_tls:
+        # context = ssl.create_default_context()
+        context = ssl.create_default_context(cafile=certifi.where())
+        sock = context.wrap_socket(sock, server_hostname = hostname)
+
+    # send hello and extract game id
+    send_json_line(sock, hello)
+    hello_msg = recv_json(sock, buf)
+    game_id = hello_msg["id"]
+
+    # TODO: send guess and here is where algorithm to get the word looping
+    guess = {"type":"guess","id": game_id, "word": "treed"}
+    send_json_line(sock, guess)
+    guess_msg = recv_json(sock, buf)
+    print(guess_msg)
+    # end the game 
+
+
+if __name__ == "__main__":
+    main()
