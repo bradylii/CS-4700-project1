@@ -14,6 +14,7 @@ I use a simple constraint-based approach using the provided word list (project1-
 This strategy is intentionally simple but converges well under the 500-guess limit.
 
 # Testing
+Before the final implementation, print statements were used to verify connection and experiment with the server and JSON. The below commands are used to test the application fully. My username is li.bra.
 `make`
 
 `./client proj1.4700.network <username>`
