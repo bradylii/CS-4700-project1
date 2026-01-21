@@ -105,16 +105,21 @@ def main():
             if not candidates:
                 print("no candidates left", file=sys.stderr)
                 return
+            # guess word
             word_guess = candidates[0]
             guess = {"type":"guess","id": game_id, "word": word_guess}
             send_json_line(sock, guess)
             reply_msg = recv_json(sock, buf)
             reply_type = reply_msg.get("type")
 
+            # handle reply and eror handling
             if reply_type == "bye":
-                print(reply_msg["flag"])
+                flag = reply_msg.get("flag")
+                if not flag:
+                    print(f"protocol error: missing flag", file=sys.stderr)
+                    return
+                print(flag)
                 return
-            # eror handling
             if reply_type == "error":
                 print(reply_msg.get("message", "unknown error"), file=sys.stderr)
                 return
@@ -125,7 +130,8 @@ def main():
             last_entry = reply_msg["guesses"][-1]
             last_guess = last_entry["word"]
             marks = last_entry["marks"]
-
+            
+            # filter and simulate marks
             new_candidates = []
             for word in candidates:
                 candidate_marks = simulate(word, last_guess)
@@ -133,6 +139,7 @@ def main():
                     new_candidates.append(word)
             candidates = new_candidates
     finally:
+        # close socket
         sock.close()
 
 if __name__ == "__main__":
