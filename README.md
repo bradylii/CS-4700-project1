@@ -1,6 +1,6 @@
 # CS-4700-project1
 
-The following outlines my implementation of project 1: socket basics, a Wordle guessing game working with TCP and TLS.
+The following outlines my implementation of project 1: socket basics, a Wordle guessing application working with TCP and TLS.
 
 # Guessing Algorithm
 I use a simple constraint-based approach using the provided word list (project1-words.txt):
@@ -14,11 +14,13 @@ I use a simple constraint-based approach using the provided word list (project1-
 This strategy is intentionally simple but converges well under the 500-guess limit.
 
 # Testing
-make
-./client proj1.4700.network <username>
-./client -s proj1.4700.network <username>
+`make`
+
+`./client proj1.4700.network <username>`
+
+`./client -s proj1.4700.network <username>`
 
 # Approach and Experience
-My approach was to first focus on establishing a correct and reliable connection to the server before worrying about the guessing logic. This project was interesting because it operated at a lower level than what I’m used to — instead of working with higher-level client/server APIs, I had to work directly with TCP sockets, raw bytes, and buffering to correctly parse newline-terminated JSON messages. Handling partial reads and building a receive buffer required some additional documentation review, but it helped clarify how data actually moves through the networking stack.
+My approach was to first focus on establishing a correct and reliable connection to the server before worrying about the guessing logic. This project was interesting because it operated at a lower level than what I’m used to, instead of working with higher-level client/server APIs, I had to work directly with TCP sockets, raw bytes, and buffering to correctly parse newline-terminated JSON messages. Handling partial reads and building a receive buffer required some additional documentation review, but it helped clarify how data actually moves through the networking stack.
 
-Once the networking and protocol handling were in place, I implemented a simple and reliable guessing strategy. Using the provided word list, the client maintains a list of possible candidate words and repeatedly filters it based on the server’s feedback by simulating Wordle’s scoring rules. To keep the solution straightforward, the client always guesses the first remaining candidate. I also added basic error handling
+Once the networking and protocol handling were in place, I implemented a simple and reliable guessing strategy. Using the provided word list, the client maintains a list of possible candidate words and repeatedly filters it based on the server’s feedback by simulating Wordle’s scoring rules. To keep the solution straightforward, the client always guesses the first remaining candidate. I also added basic error handling.
