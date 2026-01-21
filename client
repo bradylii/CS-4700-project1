@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import socket, ssl, json, certifi, argparse
+import socket, ssl, json, certifi, argparse, sys
 
 # Helper to send to server
 def send_json_line(sock, obj):
@@ -28,6 +28,26 @@ def recv_json(sock, buf):
     str_line = byte_line.decode("ascii")
     return json.loads(str_line)
 
+# Helper for backend logic guessing wordle simulating the marks
+def simulate(secret, guess):
+    marks = [0] * 5
+    secret_left = list(secret)  # letters we can still match for "1"s
+    # exact matches
+    for i in range(5):
+        if guess[i] == secret[i]:
+            marks[i] = 2
+            secret_left[i] = None # consume
+    # wrong-position matches, second pass
+    for i in range(5):
+        if marks[i] != 0:
+            continue
+        ch = guess[i]
+        if ch in secret_left:
+            marks[i] = 1
+            secret_left[secret_left.index(ch)] = None
+    return marks
+
+
 def main():
     # deal with flags and set up
     parser = argparse.ArgumentParser()
@@ -38,6 +58,7 @@ def main():
     args = parser.parse_args()
 
     # variables
+    max_guesses = 500 # as outlined in project description
     use_tls = args.tls
     username = args.username
     hostname = args.hostname
@@ -55,25 +76,64 @@ def main():
 
     buf = bytearray() # buffer for loading/saving chunks
     sock = socket.create_connection((hostname, port), None)
+    try:
+        # wrap socket for cryptographic layer for TLS, SSL runs over TCP connection
+        if use_tls:
+            context = ssl.create_default_context(cafile=certifi.where())
+            sock = context.wrap_socket(sock, server_hostname = hostname)
 
-    # wrap socket for cryptographic layer for TLS, SSL runs over TCP connection
-    if use_tls:
-        # context = ssl.create_default_context()
-        context = ssl.create_default_context(cafile=certifi.where())
-        sock = context.wrap_socket(sock, server_hostname = hostname)
+        # send hello and extract game id
+        send_json_line(sock, hello)
+        hello_msg = recv_json(sock, buf)
+        # error handling
+        if hello_msg.get("type") == "error":
+            print(hello_msg.get("message", "unknown error"), file=sys.stderr)
+            return
+        if hello_msg.get("type") != "start" or "id" not in hello_msg:
+            print(f"protocol error: {hello_msg}", file=sys.stderr)
+            return
 
-    # send hello and extract game id
-    send_json_line(sock, hello)
-    hello_msg = recv_json(sock, buf)
-    game_id = hello_msg["id"]
+        game_id = hello_msg["id"]
 
-    # TODO: send guess and here is where algorithm to get the word looping
-    guess = {"type":"guess","id": game_id, "word": "treed"}
-    send_json_line(sock, guess)
-    guess_msg = recv_json(sock, buf)
-    print(guess_msg)
-    # end the game 
+        # load words
+        with open("project1-words.txt", "r", encoding="ascii") as f:
+            words = [line.strip() for line in f if line.strip()]
+        candidates = words[:]
 
+        # guessing loop for wordle
+        for _ in range(max_guesses):
+            if not candidates:
+                print("no candidates left", file=sys.stderr)
+                return
+            word_guess = candidates[0]
+            guess = {"type":"guess","id": game_id, "word": word_guess}
+            send_json_line(sock, guess)
+            reply_msg = recv_json(sock, buf)
+            reply_type = reply_msg.get("type")
+
+            if reply_type == "bye":
+                print(reply_msg["flag"])
+                return
+            # eror handling
+            if reply_type == "error":
+                print(reply_msg.get("message", "unknown error"), file=sys.stderr)
+                return
+            if reply_type != "retry":
+                print(f"protocol error: {reply_type}", file=sys.stderr)
+                return
+            
+            last_entry = reply_msg["guesses"][-1]
+            last_guess = last_entry["word"]
+            marks = last_entry["marks"]
+
+            new_candidates = []
+            for word in candidates:
+                candidate_marks = simulate(word, last_guess)
+                if candidate_marks == marks:
+                    new_candidates.append(word)
+            candidates = new_candidates
+    finally:
+        sock.close()
 
 if __name__ == "__main__":
     main()
